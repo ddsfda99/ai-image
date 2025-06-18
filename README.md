@@ -73,18 +73,15 @@ accelerate launch train_lora.py \
 
 ## 五、运行效果
 文生图（stable-diffusion-v1-5只支持英文提示词）
-![alt text](txttoimg.png)
+![alt text](txt2img.png){: width="400px" }
 
 图像风格迁移
-![alt text](style-transfer.png)
+![alt text](img2img.png){: width="400px" }
 
-人物动漫化
-![alt text](anime.png)
+## 六. 项目资料
+完整报告链接：待完成
 
-## 项目报告
-报告链接
+AI图像生成项目地址：https://github.com/ddsfda99/ai-image
 
-## 项目地址
-
-GitHub Repo: [https://github.com/your-username/ai-image-lab](https://github.com/your-username/ai-image-lab)
+微调训练+模型比较分析项目地址：https://github.com/ddsfda99/fine_tuning/tree/main
 
