@@ -1,96 +1,116 @@
 from flask import Flask, request, jsonify, send_from_directory
-import os
-import sys
-import uuid
 from datetime import datetime
 from PIL import Image
+import os
+import uuid
 import torch
-from diffusers import StableDiffusionPipeline
+from diffusers import StableDiffusionPipeline, StableDiffusionImg2ImgPipeline
 from safetensors.torch import load_file
+import time
 
-# 项目路径配置
+# ------------------ 路径配置 ------------------
 BASE_DIR = os.path.dirname(__file__)
 PROJECT_DIR = os.path.abspath(os.path.join(BASE_DIR, '..'))
-STATIC_DIR = os.path.join(BASE_DIR, 'static')
-os.makedirs(STATIC_DIR, exist_ok=True)
-
-# 模型基础路径
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+FRONTEND_DIR = os.path.join(PROJECT_DIR, 'frontend')
 MODEL_DIR = os.path.join(PROJECT_DIR, 'models', 'stable-diffusion-v1-5')
 LORA_DIR = os.path.join(PROJECT_DIR, 'models', 'lora')
-print(f"正在加载基础模型：{MODEL_DIR}")
+TI_PATH = os.path.join(PROJECT_DIR, 'models', 'textual-inversion', 'anime-style', 'learned_embeds.safetensors')
+os.makedirs(STATIC_DIR, exist_ok=True)
 
-def load_base_pipe():
-    return StableDiffusionPipeline.from_pretrained(
-        MODEL_DIR,
-        torch_dtype=torch.float16
-    ).to("cuda")
-
-# 初始化模型
-pipe = load_base_pipe()
-print("模型加载完成")
-
-# 多风格 LoRA 权重目录（只加载 .safetensors 文件）
+# ------------------ 风格配置 ------------------
 LORA_WEIGHTS = {
     "monet": os.path.join(LORA_DIR, "monet.safetensors"),
-    "vangogh": os.path.join(LORA_DIR, "van_gogh.safetensors"),
+    "vangogh": os.path.join(LORA_DIR, "vangogh.safetensors"),
+    "francis": os.path.join(LORA_DIR, "francis.safetensors"),
+}
+TI_PLACEHOLDERS = {
+    "anime-style": "<anime-style>"
 }
 
-# 当前激活的风格，用于避免重复加载
-current_style = None
+# ------------------ 模型加载 ------------------
+print("正在加载模型...")
+text2img_pipe = StableDiffusionPipeline.from_pretrained(MODEL_DIR, torch_dtype=torch.float16).to("cuda")
+img2img_pipe = StableDiffusionImg2ImgPipeline.from_pretrained(MODEL_DIR, torch_dtype=torch.float16).to("cuda")
+anime_pipe = StableDiffusionImg2ImgPipeline.from_pretrained(MODEL_DIR, torch_dtype=torch.float16).to("cuda")
 
-# 手动加载 LoRA 权重（简单叠加，不可切换回原始）
-def apply_lora_weights(pipe, lora_path, alpha=1.0):
+if os.path.exists(TI_PATH):
+    text2img_pipe.load_textual_inversion(TI_PATH, token=TI_PLACEHOLDERS["anime-style"])
+    anime_pipe.load_textual_inversion(TI_PATH, token=TI_PLACEHOLDERS["anime-style"])
+    print("已加载 Textual Inversion 模型")
+else:
+    print("未找到 Textual Inversion 模型")
+
+# ------------------ 工具函数 ------------------
+def save_image(img, prefix):
+    filename = f"{prefix}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}.png"
+    path = os.path.join(STATIC_DIR, filename)
+    img.save(path)
+    return f"/static/{filename}"
+
+def apply_lora(pipe, lora_path, alpha=1.0):
+    print(f"加载 LoRA 权重：{lora_path}")
     state_dict = load_file(lora_path)
-    for key, value in state_dict.items():
-        if key in pipe.unet.state_dict() and pipe.unet.state_dict()[key].shape == value.shape:
-            pipe.unet.state_dict()[key] += alpha * value.to(pipe.unet.device)
-    print(f"✅ LoRA 权重已加载：{os.path.basename(lora_path)}")
+    for k, v in state_dict.items():
+        if k in pipe.unet.state_dict() and pipe.unet.state_dict()[k].shape == v.shape:
+            pipe.unet.state_dict()[k] += alpha * v.to(pipe.unet.device)
 
-# 初始化 Flask
+# ------------------ Flask 应用 ------------------
 app = Flask(__name__)
 
 @app.route('/api/text-to-image', methods=['POST'])
 def text_to_image():
-    global current_style
-    global pipe
-
+    start = time.time()
     prompt = request.form.get("prompt", "")
-    style = request.form.get("style", "monet").lower()
+    style = request.form.get("style", "none")
 
     if not prompt:
         return jsonify({"error": "缺少 prompt 参数"}), 400
-    if style not in LORA_WEIGHTS:
-        return jsonify({"error": f"不支持的风格：{style}"}), 400
 
-    try:
-        # 如果风格变化，重载基础模型 + 应用新 LoRA
-        if current_style != style:
-            print(f"🎨 切换风格为：{style}")
-            pipe = load_base_pipe()
-            apply_lora_weights(pipe, LORA_WEIGHTS[style])
-            current_style = style
+    final_prompt = prompt
+    if style in LORA_WEIGHTS:
+        apply_lora(text2img_pipe, LORA_WEIGHTS[style])
+        final_prompt = f"<{style}-style> {prompt}"
+    elif style in TI_PLACEHOLDERS:
+        final_prompt = f"{TI_PLACEHOLDERS[style]} {prompt}"
 
-        styled_prompt = f"<{style}-style> {prompt}"
+    image = text2img_pipe(prompt=final_prompt, guidance_scale=7.5).images[0]
+    output_url = save_image(image, "text2img")
+    return jsonify({"output_url": output_url, "inference_time": time.time() - start})
 
-        image = pipe(styled_prompt).images[0]
-        filename = f"text2img_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}.png"
-        output_path = os.path.join(STATIC_DIR, filename)
-        image.save(output_path)
+@app.route('/api/style-transfer', methods=['POST'])
+def style_transfer():
+    start = time.time()
+    content_file = request.files.get("content")
+    style = request.form.get("style", "monet")
+    if not content_file:
+        return jsonify({"error": "缺少内容图像"}), 400
 
-        return jsonify({"output_url": f"/static/{filename}"})
-    except Exception as e:
-        print(f"❌ 生成失败: {e}")
-        return jsonify({"error": str(e)}), 500
+    image = Image.open(content_file).convert("RGB").resize((512, 512))
+    if style in LORA_WEIGHTS:
+        apply_lora(img2img_pipe, LORA_WEIGHTS[style])
+    result = img2img_pipe(prompt=f"<{style}-style>", image=image, strength=0.75, guidance_scale=7.5).images[0]
+    output_url = save_image(result, "style_transfer")
+    return jsonify({"output_url": output_url, "inference_time": time.time() - start})
 
-# 前端页面服务
+
+# ------------------ 静态资源与页面 ------------------
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(STATIC_DIR, filename)
+
 @app.route('/')
-def serve_index():
-    return send_from_directory(os.path.abspath(os.path.join(BASE_DIR, '..', 'frontend')), 'index.html')
+def index():
+    return send_from_directory(FRONTEND_DIR, 'index.html')
 
 @app.route('/<path:path>')
-def serve_static(path):
-    return send_from_directory(os.path.abspath(os.path.join(BASE_DIR, '..', 'frontend')), path)
+def catch_all(path):
+    return send_from_directory(FRONTEND_DIR, path)
+
+@app.route('/samples/<path:filename>')
+def serve_samples(filename):
+    return send_from_directory(os.path.join(FRONTEND_DIR, 'samples'), filename)
 
 if __name__ == '__main__':
-    print("🚀 启动 Flask 后端...")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print("🚀 后端服务已启动：http://127.0.0.1:5000")
+    app.run(debug=True, host="0.0.0.0", port=5000)
