@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title> 文本生成图像</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+    <style>
+        body {
+            background: linear-gradient(to right, #1e1e2f, #3a1c71);
+            color: white;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        select option {
+            background: #2e2b57;
+        }
+
+        #particles-js {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
+    </style>
+</head>
+
+<body class="p-6 font-sans relative">
+    <div id="particles-js"></div>
+    <div class="max-w-3xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6 text-center"> 文本生成图像</h1>
+
+        <div class="glass space-y-4">
+            <div class="flex flex-col md:flex-row gap-4">
+                <input type="text" id="prompt" placeholder="请输入英文描述词"
+                    class="flex-1 px-4 py-2 rounded bg-white/20 text-white placeholder-gray-300">
+                <select id="style" class="px-4 py-2 rounded bg-white/20 text-white">
+                    <option value="none">无风格</option>
+                    <option value="monet">印象派（Monet）</option>
+                    <option value="vangogh">后印象派（Van Gogh）</option>
+                    <option value="francis">抽象表现派（Sam Francis）</option>
+                </select>
+                <button id="generateBtn" onclick="generateImage()"
+                    class="bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-2 rounded text-white hover:scale-105 transition">
+                    生成
+                </button>
+            </div>
+            <div id="result" class="text-center mt-4"></div>
+        </div>
+
+        <div class="mt-10">
+            <h2 class="text-xl font-semibold mb-2"> 艺术风格预览</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div><img src="/samples/monet.jpg" class="rounded-lg" />
+                    <p class="mt-1 text-center text-sm">印象派（Monet）风格</p>
+                </div>
+                <div><img src="/samples/vangogh.jpg" class="rounded-lg" />
+                    <p class="mt-1 text-center text-sm">后印象派（Van Gogh）风格</p>
+                </div>
+                <div><img src="/samples/francis.jpg" class="rounded-lg" />
+                    <p class="mt-1 text-center text-sm">抽象表现派（Sam Francis）风格</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-10">
+            <a href="index.html"
+                class="inline-block bg-white/20 text-white px-6 py-2 rounded-full hover:bg-white/30 transition shadow backdrop-blur">
+                ⬅ 返回主页
+            </a>
+        </div>
+    </div>
+
+    <script>
+        async function generateImage() {
+            const prompt = document.getElementById("prompt").value;
+            const style = document.getElementById("style").value;
+            const resultDiv = document.getElementById("result");
+            const button = document.getElementById("generateBtn");
+
+            resultDiv.innerHTML = `<p class="text-white/80 animate-pulse"> 图像生成中，请稍候...</p>`;
+            button.disabled = true;
+            button.textContent = "生成中...";
+
+            const form = new FormData();
+            form.append("prompt", prompt);
+            form.append("style", style);
+
+            try {
+                const res = await fetch("/api/text-to-image", {
+                    method: "POST",
+                    body: form
+                });
+                const data = await res.json();
+
+                resultDiv.innerHTML = `
+          <img src="${data.output_url}" class="mx-auto mt-4 rounded shadow-lg max-w-sm"/>
+          <p class='text-sm mt-2 text-white/70'>推理时间：${data.inference_time.toFixed(2)} 秒</p>
+          <a href="${data.output_url}" download class="mt-3 inline-block bg-white/20 text-white text-sm px-4 py-2 rounded hover:bg-white/30 transition">下载图像</a>
+        `;
+            } catch (err) {
+                resultDiv.innerHTML = `<p class="text-red-400"> 生成失败，请重试。</p>`;
+                console.error("生成失败：", err);
+            }
+
+            button.disabled = false;
+            button.textContent = "生成";
+        }
+
+        particlesJS("particles-js", {
+            particles: {
+                number: { value: 80 },
+                size: { value: 3 },
+                color: { value: "#ffffff" },
+                line_linked: {
+                    enable: true,
+                    distance: 120,
+                    color: "#ffffff",
+                    opacity: 0.2,
+                    width: 1
+                },
+                move: { speed: 2 }
+            },
+            interactivity: {
+                events: {
+                    onhover: { enable: true, mode: "repulse" }
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

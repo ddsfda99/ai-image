@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 创意图像生成工坊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+    <style>
+        body {
+            background: linear-gradient(to right, #1e1e2f, #3a1c71);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #particles-js {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            border-radius: 1.5rem;
+            padding: 3rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            min-height: 180px;
+        }
+
+        input,
+        select,
+        button {
+            outline: none;
+        }
+
+        select {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        select option {
+            background-color: #2d2a55;
+            color: white;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen font-sans p-6">
+    <div id="particles-js"></div>
+
+    <div class="max-w-4xl mx-auto space-y-14 relative z-10">
+        <h1 class="text-4xl font-bold text-center drop-shadow-xl mb-10">AI 创意图像生成工坊</h1>
+
+        <!-- 功能入口 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div class="glass hover:scale-105 transition cursor-pointer"
+                onclick="window.location.href='text2image.html'">
+                <h2 class="text-2xl font-semibold mb-3">文本生成图像</h2>
+                <p class="text-base text-white/80 leading-relaxed">输入英文描述词，通过不同模型快速生成专属图像，支持多风格转换。</p>
+            </div>
+
+            <div class="glass hover:scale-105 transition cursor-pointer"
+                onclick="window.location.href='style_transfer.html'">
+                <h2 class="text-2xl font-semibold mb-3">图像风格迁移</h2>
+                <p class="text-base text-white/80 leading-relaxed">上传图片并选择风格模型，将现实照片一键转化为 Van Gogh 或 Monet 画风。</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        particlesJS("particles-js", {
+            particles: {
+                number: { value: 80 },
+                size: { value: 3 },
+                color: { value: "#ffffff" },
+                line_linked: {
+                    enable: true,
+                    distance: 120,
+                    color: "#ffffff",
+                    opacity: 0.2,
+                    width: 1
+                },
+                move: { speed: 2 }
+            },
+            interactivity: {
+                events: {
+                    onhover: { enable: true, mode: "repulse" }
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>
